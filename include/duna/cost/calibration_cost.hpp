@@ -10,6 +10,17 @@
 namespace duna
 {
 
+    inline static void ParamToModelMatrix(const Eigen::Matrix<double,4,1>& x0, Eigen::Matrix<double,3,4>& model_matrix)
+    {
+        model_matrix.setZero();
+        model_matrix(0,0) = x0[0]; // fx
+        model_matrix(1,1) = x0[1]; // fx
+        model_matrix(0,2) = x0[2]; // fx
+        model_matrix(1,2) = x0[3]; // fx
+        model_matrix(2,2) = 1; // fx
+
+    }
+
     /* Define your dataset structure*/
     struct camera_calibration_data_t
     {
@@ -71,18 +82,19 @@ namespace duna
 
             double sum = 0;
 
-            Eigen::Matrix4d transform;
+            Eigen::Matrix<double,3,4> transform;
             VectorNd x_double(x.template cast<double>());
 
             // Eigen::Matrix4f transform;
 
-            so3::param2Matrix(x_double, transform);
+            ParamToModelMatrix(x_double, transform);
 
             for (int i = 0; i < l_dataset->point_list.size(); ++i)
             {
 
                 Eigen::Vector3d out_pixel;
-                out_pixel = l_dataset->CameraModel * transform * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
+                // 3 x 4 * 4 x 4 * 4 x 1
+                out_pixel =  transform * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
 
                 // compose error vector
                 Eigen::Vector2d xout;
@@ -102,7 +114,7 @@ namespace duna
             b.setZero();
 
             // Build matrix from xi
-            Eigen::Matrix4d transform;
+            Eigen::Matrix<double,3,4> transform;
 
             VectorNd x_double;
             for (int i = 0; i < NPARAM; ++i)
@@ -110,13 +122,15 @@ namespace duna
                 x_double[i] = x[i];
             }
 
-            so3::param2Matrix<double>(x_double, transform);
+            ParamToModelMatrix(x_double, transform);
+
+            std::cout << std::endl << transform << std::endl;
 
             Eigen::Matrix<double, 2, NPARAM> jacobian_row;
 
             // Build incremental transformations
-            Eigen::Matrix4d transform_plus[NPARAM];
-            Eigen::Matrix4d transform_minus[NPARAM];
+            Eigen::Matrix<double,3,4> transform_plus[NPARAM];
+            Eigen::Matrix<double,3,4> transform_minus[NPARAM];
 
             Eigen::Matrix<double, NPARAM, NPARAM> hessian_;
             Eigen::Matrix<double, NPARAM, 1> b_;
@@ -131,15 +145,15 @@ namespace duna
                 x_plus[j] += epsilon;
                 x_minus[j] -= epsilon;
 
-                so3::param2Matrix<double>(x_plus, transform_plus[j]);
-                so3::param2Matrix<double>(x_minus, transform_minus[j]);
+                ParamToModelMatrix(x_plus, transform_plus[j]);
+                ParamToModelMatrix(x_minus, transform_minus[j]);
             }
 
             for (int i = 0; i < l_dataset->point_list.size(); ++i)
             {
 
                 Eigen::Vector3d out_pixel;
-                out_pixel = l_dataset->CameraModel * transform * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
+                out_pixel =  transform * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
 
                 // compose error vector
                 Eigen::Vector2d xout;
@@ -150,8 +164,8 @@ namespace duna
                 {
 
                     Eigen::Vector3d out_pixel_plus, out_pixel_minus;
-                    out_pixel_plus = l_dataset->CameraModel * transform_plus[j] * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
-                    out_pixel_minus = l_dataset->CameraModel * transform_minus[j] * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
+                    out_pixel_plus =  transform_plus[j] * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
+                    out_pixel_minus =  transform_minus[j] * l_dataset->camera_lidar_frame * l_dataset->point_list[i].getVector4fMap().cast<double>();
 
                     Eigen::Vector2d xout_plus, xout_minus;
                     xout_plus[0] = l_dataset->pixel_list[i].x - (out_pixel_plus[0] / out_pixel_plus[2]);

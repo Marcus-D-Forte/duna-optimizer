@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#define MODEL_PARAMS 6
+#define MODEL_PARAMS 4
 #define FLOAT_TOL 0.0025
 
 using namespace duna;
